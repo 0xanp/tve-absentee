@@ -1,0 +1,8 @@
+pandas==1.4.2
+pandasgui==0.2.13
+python-dotenv==0.21.0
+selenium==4.5.0
+xlsxwriter==3.0.3
+wxPython==4.2.0
+pyinstaller==5.6.1
+webdriver_manager==3.8.4
