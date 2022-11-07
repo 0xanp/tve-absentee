@@ -19,42 +19,61 @@ CHROMEDRIVER_PATH = os.environ.get("CHROMEDRIVER_PATH")
 GOOGLE_CHROME_BIN = os.environ.get("GOOGLE_CHROME_BIN")
 
 
-def html_to_dataframe(driver, table_header, table_data, course_name=None):
-    header_row = []
-    df_data = []
-    for header in table_header:
-        header_row.append(header.text)
-    for row in table_data:
-        columns = row.find_elements(By.XPATH,"./td") # Use dot in the xpath to find elements with in element.
-        table_row = []
-        for column in columns:
+def html_to_dataframe(driver, table_data):
+    course_dict = {}
+    # iterate through the table of students with their attendance 
+    # each student has a dictionary of dates where each date has a dictionary
+    # of specific critera of evaluation: attendance, puncutuality, homework,
+    # attitude, and other comments, each criterion sometimes has sub-criteria as 
+    # well
+
+    # "student" here represents a row in the table data pulled using selenium
+    for student in table_data:
+        # each student (row) has a collection of dates (column)
+        dates = student.find_elements(By.XPATH,"./td")
+        # iterate through each date and construct a dictionary of evaluation critera
+        for date in dates:
             try:
-                name = column.find_element(By.XPATH, './b')
-                #table_row.append(name.text)
-                print(f"{name.text}")
+                # first "date" is the name of the student
+                name = date.find_element(By.XPATH, './b')
+                # assign each student their own collection of dates
+                course_dict[name.text] = {}
+                #print(f"{name.text}")
+                print("done getting student name")
             except:
                 try:
-                    href = column.find_element(By.XPATH,"./div/a").get_attribute('href')
+                    href = date.find_element(By.XPATH,"./div/a").get_attribute('href')
                     driver.execute_script(href)
-                    time.sleep(.8)
-                    forms = driver.find_elements(By.CLASS_NAME,"form-group")
+                    time.sleep(.5)
+                    criteria = driver.find_elements(By.CLASS_NAME,"form-group")
                     date = driver.find_element(By.XPATH,'//*[@id="zDiemdanh_style1_ngay"]').get_attribute('value')
-                    print(date)
-                    for form in forms:
-                        labels = form.find_elements(By.XPATH,"./label")
+                    # then assign each date its own dict as well
+                    course_dict[name.text][date] = {}
+                    #print(date)
+                    print('done getting a date')
+                    for criteron in criteria:
+                        labels = criteron.find_elements(By.XPATH,"./label")
                         if labels[0].text.strip() == "Chọn lớp" or labels[0].text.strip() == "Ngày":
                             continue
                         elif labels[0].text.strip() == "Nhận xét khác/ Other comments":
                             other_comments = driver.find_element(By.XPATH,'//*[@id="zDiemdanh_style1_comment"]').get_attribute('value')
-                            print("Nhận xét khác/ Other comments:", other_comments)                         
+                            course_dict[name.text][date]['Nhận xét khác/ Other comments'] = other_comments
+                            print('done getting other comments')
+                            #print("Nhận xét khác/ Other comments:", other_comments)                         
                         else:
-                            print(labels[0].text)
+                            #print(labels[0].text)
+                            criteria_label = labels[0].text
+                            course_dict[name.text][date][criteria_label] = {}
                             labels.remove(labels[0])
+                            print('done getting a criterion')
                             for label in labels:
-                                print(f'{label.text}: {label.find_element(By.XPATH,"./input").get_attribute("checked")}') 
+                                course_dict[name.text][date][criteria_label][label.text] = label.find_element(By.XPATH,"./input").get_attribute("checked")
+                                #print(f'{label.text}: {label.find_element(By.XPATH,"./input").get_attribute("checked")}') 
+                                print('done getting a sub-criterion')
                 except:
                     pass
                 pass
+    '''
         df_data.append(table_row)
     df = pd.DataFrame(df_data,columns=header_row)
     df = df.iloc[: , 1:]
@@ -62,6 +81,8 @@ def html_to_dataframe(driver, table_header, table_data, course_name=None):
         temp = [course_name for i in range(len(df))]
         df['Course'] = temp
     return df
+    '''
+    return course_dict
 
 def load_options():
     # initialize the Chrome driver
@@ -84,28 +105,14 @@ def load_options():
     driver.get('https://trivietedu.ileader.vn/Default.aspx?mod=lophoc!diemdanh')
     
     # pulling the main table
-    table_header = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.XPATH,'//*[@id="dyntable"]/thead/tr/th')))
+#    table_header = WebDriverWait(driver, 10).until(
+#                EC.presence_of_all_elements_located((By.XPATH,'//*[@id="dyntable"]/thead/tr/th')))
     table_data = WebDriverWait(driver, 10).until(
                 EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-    course_dict = {}
-    course_df = html_to_dataframe(driver, table_header, table_data)
-    print(course_df)
+    course_dicts = {}
+    course_dicts['Test'] = html_to_dataframe(driver, table_data)
+    with open('test.json', 'w') as fp:
+        json.dump(course_dicts, fp)
+    #return driver, course_dicts
 
-    return driver, course_df, course_dict
-
-driver, course_df, course_dict = load_options()
-placeholder = st.empty()
-
-placeholder.selectbox(
-'Class',
-(list(course_df['Tên Lớp'])),
-disabled=True, 
-key='3'
-)
-big_df = pd.DataFrame()
-for course_name, course_students in course_dict.items():
-    small_df = course_dict[course_name]
-    small_df[course_name] = [course_name for i in len(small_df)]
-    big_df = pd.concat([big_df, small_df])
-st.table(big_df)
+load_options()
