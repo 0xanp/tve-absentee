@@ -10,13 +10,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
 
 # getting credentials from environment variables
 load_dotenv()
 MANAGER_USERNAME = os.getenv("MANAGER_USERNAME")
 MANAGER_PASSWORD = os.getenv("MANAGER_PASSWORD")
-CHROMEDRIVER_PATH = os.environ.get("CHROMEDRIVER_PATH")
-GOOGLE_CHROME_BIN = os.environ.get("GOOGLE_CHROME_BIN")
 
 
 def html_to_dataframe(driver, table_data):
@@ -73,26 +73,16 @@ def html_to_dataframe(driver, table_data):
                 except:
                     pass
                 pass
-    '''
-        df_data.append(table_row)
-    df = pd.DataFrame(df_data,columns=header_row)
-    df = df.iloc[: , 1:]
-    if course_name:
-        temp = [course_name for i in range(len(df))]
-        df['Course'] = temp
-    return df
-    '''
     return course_dict
 
 def load_options():
     # initialize the Chrome driver
     options = Options()
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
-    options.binary_location = GOOGLE_CHROME_BIN
     #options.add_argument('--headless')
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-sandbox")
-    driver = webdriver.Chrome(chrome_options=options, executable_path=CHROMEDRIVER_PATH)
+    driver = webdriver.Chrome(options=options, service=ChromeService(ChromeDriverManager().install()))
     # login page
     driver.get("https://trivietedu.ileader.vn/login.aspx")
     # find username/email field and send the username itself to the input field
