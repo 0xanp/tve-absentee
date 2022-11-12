@@ -11,6 +11,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
+import time
+import pandas as pd
 
 # getting credentials from environment variables
 load_dotenv()
@@ -31,8 +33,8 @@ class HelloFrame(wx.Frame):
         self.ok_button = wx.Button(self, wx.ID_OK, label='Ok')
         self.startdatepicker = wx.adv.CalendarCtrl(self, 1, wx.DateTime.Now())
         self.enddatepicker = wx.adv.CalendarCtrl(self, 2, wx.DateTime.Now())
-        self.start_date = self.startdatepicker.PyGetDate()
-        self.end_date = self.enddatepicker.PyGetDate()
+        self.start_date = self.startdatepicker.PyGetDate().date()
+        self.end_date = self.enddatepicker.PyGetDate().date()
         vertical_container = wx.BoxSizer(wx.VERTICAL)
         vertical_container.AddSpacer(10)
         vertical_container.AddSpacer(10)
@@ -66,21 +68,22 @@ class HelloFrame(wx.Frame):
             for date in dates:
                 try:
                     # first "date" is the name of the student
-                    name = date.find_element(By.XPATH, './b')
+                    name = date.find_element(By.XPATH, './b').text
                     # assign each student their own collection of dates
-                    course_dict[name.text] = []
-                    print(f"{name.text}")
+                    course_dict[name] = []
+                    print(f"{name}")
                     #print("done getting student name")
                 except:
-                    #try:
-                    absent_dates = date.find_elements(By.XPATH,"./div/a/i")
-                    for absent_date in absent_dates:
-                        if absent_date.get_attribute("class") == "fa fa-check-circle fa-red":
-                            absent_date = datetime.strptime(absent_date.get_attribute("id").split("_")[-1],"%d-%m-%Y")
-                            course_dict[name.text].append(absent_date.strftime("%d/%m/%Y"))
-                            print(absent_date.strftime('%A'),absent_date.strftime("%d/%m/%Y"))
-                    #except:
-                    #    pass
+                    try:
+                        absent_dates = date.find_elements(By.XPATH,"./div/a/i")
+                        for absent_date in absent_dates:
+                            if absent_date.get_attribute("class") == "fa fa-check-circle fa-red":
+                                absent_date = datetime.strptime(absent_date.get_attribute("id").split("_")[-1],"%d-%m-%Y")
+                                if absent_date.date() >= self.start_date and absent_date.date() <= self.end_date:
+                                    course_dict[name].append(absent_date.strftime("%d/%m/%Y"))
+                                    print(absent_date.strftime('%A'),absent_date.strftime("%d/%m/%Y"))
+                    except:
+                        pass
                     pass
         return course_dict
 
@@ -107,7 +110,7 @@ class HelloFrame(wx.Frame):
         return driver, course_select
     
     def showProgress(self):
-        self.progress = wx.ProgressDialog("Pulling Course Data in progress...", "Please wait!", maximum=self.maxPercent, parent=self, style=wx.PD_SMOOTH|wx.PD_AUTO_HIDE)
+        self.progress = wx.ProgressDialog("Pulling Absentee Data in progress...", "Please wait!", maximum=self.maxPercent, parent=self, style=wx.PD_SMOOTH|wx.PD_AUTO_HIDE)
 
     def destoryProgress(self):
         self.progress.Destroy()
@@ -121,19 +124,52 @@ class HelloFrame(wx.Frame):
         #print(self.end_date, type(self.end_date))
 
     def OnOkClick(self, evt):
+        start_time = datetime.now()
         driver, course_select = self.load_options()
-        table_data = WebDriverWait(driver, 15).until(
-            EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-        for course in course_select.options():
-            course_dicts = {}
-            course_dicts[course] = self.html_to_dataframe(driver, table_data)
+        percent = 0
+        course_dicts = {}
+        self.maxPercent = len(course_select.options)
+        self.showProgress()
+        for course in course_select.options:
+            try:
+                print("Getting Absentee data for",course.text)
+                course_select.select_by_visible_text(course.text)
+                time.sleep(25)
+                table_data = WebDriverWait(driver, 2).until(
+                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
+                course_dicts[course.text] = self.html_to_dataframe(driver, table_data)
+                percent += 1
+                self.progress.Update(percent)
+            except:
+                percent += 1
+                self.progress.Update(percent)
+                pass
+            break
+        print(course_dicts)
+        df = pd.DataFrame()
+        courses = []
+        names = []
+        dates = []
+        for course in course_dicts:
+            for student in course_dicts[course]:
+                if len(course_dicts[course][student]) != 0:
+                        courses.append(course)
+                        names.append(student)
+                        dates.append(course_dicts[course][student])
+        df["Course Name"] = courses
+        df["Student"] = names
+        df["Absent Date"] = dates
+        with open(f"{self.start_date}-{self.end_date}.json", "w") as outfile:
+            json.dump(course_dicts, outfile)
+        end_time = datetime.now()
+        print('Duration: {}'.format(end_time - start_time))
         
 
 def main():
     # When this module is run (not imported) then create the app, the
     # frame, show it, and start the event loop.
     app = wx.App()
-    frm = HelloFrame(None, title='Course List')
+    frm = HelloFrame(None, title="Absentee")
     frm.Show()
     app.MainLoop()
 
