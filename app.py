@@ -74,12 +74,8 @@ class HelloFrame(wx.Frame):
             EC.element_to_be_clickable((By.XPATH, xpath))))
         return driver, course_select
 
-    def html_to_dataframe(self, table_data, course):
+    def html_to_dataframe(self, table_data, tmp_table_rows):
         course_dict = {}
-        tmp_driver, tmp_course_select = self.load_options("https://trivietedu.ileader.vn/Default.aspx?mod=lophoc!lophoc_baihoc", '//*[@id="idlophoc"]')
-        tmp_course_select.select_by_visible_text(course)
-        tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
-                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
         # iterate through the table of students with their attendance 
         # each student has a dictionary of dates where each date has a dictionary
         # of specific critera of evaluation: attendance, puncutuality, homework,
@@ -105,17 +101,20 @@ class HelloFrame(wx.Frame):
                             if absent_date.get_attribute("class") == "fa fa-check-circle fa-red":
                                 absent_date = datetime.strptime(absent_date.get_attribute("id").split("_")[-1],"%d-%m-%Y")
                                 if absent_date.date() >= self.start_date and absent_date.date() <= self.end_date:
+                                    print('found absent date matched')
                                     for row in tmp_table_rows:
                                         cells = row.find_elements(By.XPATH,"./td")
                                         if cells[1].text == absent_date.strftime("%d/%m/%Y"):
-                                            course_dict[name][absent_date.strftime("%d/%m/%Y")] = cells[4].find_element(By.XPATH,"./div/p").text
+                                            print('finding baihoc and comments')
+                                            course_dict[name][absent_date.strftime("%d/%m/%Y")] = []
+                                            course_dict[name][absent_date.strftime("%d/%m/%Y")].append("\n".join([el.text for el in cells[2].find_elements(By.XPATH,"./div/p")]))
+                                            #course_dict[name][absent_date.strftime("%d/%m/%Y")].append(cells[4].find_element(By.XPATH,"./div/p").text)
                                             print(absent_date.strftime('%A'),absent_date.strftime("%d/%m/%Y"))
-                                            print(course_dict[name][absent_date.strftime("%d/%m/%Y")])
+                                            print('Bai Hoc:',course_dict[name][absent_date.strftime("%d/%m/%Y")][0])
+                                            #print('Comments:',course_dict[name][absent_date.strftime("%d/%m/%Y")][1])
                     except:
                         print('error')
-                        pass
                     pass
-        tmp_driver.quit()
         return course_dict
     
     def showProgress(self):
@@ -135,31 +134,38 @@ class HelloFrame(wx.Frame):
     def OnOkClick(self, evt):
         start_time = datetime.now()
         driver, course_select = self.load_options('https://trivietedu.ileader.vn/Default.aspx?mod=lophoc!diemdanh', '//*[@id="cp_lophoc"]')
+        tmp_driver, tmp_course_select = self.load_options("https://trivietedu.ileader.vn/Default.aspx?mod=lophoc!lophoc_baihoc", '//*[@id="idlophoc"]')
         percent = 0
         course_dicts = {}
         self.maxPercent = len(course_select.options)
         self.showProgress()
-        for course in ["PET 2-K13"]:
+        for course in course_select.options:
             #try:
-            print("Getting Absentee data for",course)
-            course_select.select_by_visible_text(course)
-            time.sleep(25)
+            course_select.select_by_visible_text(course.text)
+            print("Getting Absentee data for",course.text)
+            tmp_course_select.select_by_visible_text(course.text)
+            tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
+                EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
+            time.sleep(20)
             table_data = WebDriverWait(driver, 2).until(
                 EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-            course_dicts[course] = self.html_to_dataframe(table_data, course)
+            course_dicts[course.text] = self.html_to_dataframe(table_data, tmp_table_rows)
             percent += 1
             self.progress.Update(percent)
-            #except:
-            #    percent += 1
-            #    self.progress.Update(percent)
-            #    pass
-            #break
+            '''
+            except:
+                tmp_driver.quit()
+                percent += 1
+                self.progress.Update(percent)
+                pass
+            '''
         print(course_dicts)
         df = pd.DataFrame()
         courses = []
         names = []
         dates = []
         baihoc = []
+        comments = []
         for course in course_dicts:
             for student in course_dicts[course]:
                 if len(course_dicts[course][student]) != 0:
@@ -167,11 +173,17 @@ class HelloFrame(wx.Frame):
                         courses.append(course)
                         names.append(student)
                         dates.append(date)
-                        baihoc.append(course_dicts[course][student][date])
+                        if len(course_dicts[course][student][date]) > 1:
+                            baihoc.append(course_dicts[course][student][date][0])
+                            comments.append(course_dicts[course][student][date][1])
+                        else:
+                            baihoc.append(course_dicts[course][student][date][0])
+                            comments.append("")
         df["Course Name"] = courses
         df["Student"] = names
         df["Absent Date"] = dates
         df["Bai Hoc"] = baihoc
+        df["Comments"] = comments
         df = df.sort_values(['Course Name'], ascending=True).reset_index(drop=True)
         df.index += 1
         # Create a Pandas Excel writer using XlsxWriter as the engine.
