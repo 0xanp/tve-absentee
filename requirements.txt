@@ -1,5 +1,4 @@
 pandas==1.4.2
-pandasgui==0.2.13
 python-dotenv==0.21.0
 selenium==4.5.0
 xlsxwriter==3.0.3
