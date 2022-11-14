@@ -104,11 +104,12 @@ class HelloFrame(wx.Frame):
                                     print('found absent date matched')
                                     for row in tmp_table_rows:
                                         cells = row.find_elements(By.XPATH,"./td")
+                                        #print(cells[1].text, absent_date.strftime("%d/%m/%Y"))
                                         if cells[1].text == absent_date.strftime("%d/%m/%Y"):
                                             print('finding baihoc and comments')
                                             course_dict[name][absent_date.strftime("%d/%m/%Y")] = []
                                             course_dict[name][absent_date.strftime("%d/%m/%Y")].append("\n".join([el.text for el in cells[2].find_elements(By.XPATH,"./div/p")]))
-                                            #course_dict[name][absent_date.strftime("%d/%m/%Y")].append(cells[4].find_element(By.XPATH,"./div/p").text)
+                                            #course_dict[name][absent_date.strftime("%d/%m/%Y")].append(cells[4].find_element(By.XPATH,"./div/").text)
                                             print(absent_date.strftime('%A'),absent_date.strftime("%d/%m/%Y"))
                                             print('Bai Hoc:',course_dict[name][absent_date.strftime("%d/%m/%Y")][0])
                                             #print('Comments:',course_dict[name][absent_date.strftime("%d/%m/%Y")][1])
@@ -140,25 +141,23 @@ class HelloFrame(wx.Frame):
         self.maxPercent = len(course_select.options)
         self.showProgress()
         for course in course_select.options:
-            #try:
-            course_select.select_by_visible_text(course.text)
-            print("Getting Absentee data for",course.text)
-            tmp_course_select.select_by_visible_text(course.text)
-            tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
-                EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-            time.sleep(20)
-            table_data = WebDriverWait(driver, 2).until(
-                EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-            course_dicts[course.text] = self.html_to_dataframe(table_data, tmp_table_rows)
-            percent += 1
-            self.progress.Update(percent)
-            '''
+            try:
+                course_select.select_by_visible_text(course.text)
+                print("Getting Absentee data for",course.text)
+                tmp_course_select.select_by_visible_text(course.text)
+                time.sleep(5)
+                tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
+                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
+                time.sleep(13)
+                table_data = WebDriverWait(driver, 2).until(
+                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
+                course_dicts[course.text] = self.html_to_dataframe(table_data, tmp_table_rows)
+                percent += 1
+                self.progress.Update(percent)
             except:
-                tmp_driver.quit()
                 percent += 1
                 self.progress.Update(percent)
                 pass
-            '''
         print(course_dicts)
         df = pd.DataFrame()
         courses = []
@@ -195,6 +194,7 @@ class HelloFrame(wx.Frame):
         with open(f"{self.start_date}-{self.end_date}.json", "w") as outfile:
             json.dump(course_dicts, outfile)
         driver.quit()
+        tmp_driver.quit()
         end_time = datetime.now()
         print('Duration: {}'.format(end_time - start_time))
         
