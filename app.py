@@ -56,7 +56,7 @@ class HelloFrame(wx.Frame):
         # initialize the Chrome driver
         options = Options()
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        #options.add_argument('--headless')
+        options.add_argument('--headless')
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--no-sandbox")
         driver = webdriver.Chrome(options=options, service=ChromeService(ChromeDriverManager().install()))
@@ -114,7 +114,8 @@ class HelloFrame(wx.Frame):
                                             print('Bai Hoc:',course_dict[name][absent_date.strftime("%d/%m/%Y")][0])
                                             #print('Comments:',course_dict[name][absent_date.strftime("%d/%m/%Y")][1])
                     except:
-                        print('error')
+                        print(f'error when getting data for {name} on {date.text}')
+                        pass
                     pass
         return course_dict
     
@@ -140,7 +141,7 @@ class HelloFrame(wx.Frame):
         course_dicts = {}
         self.maxPercent = len(course_select.options)
         self.showProgress()
-        for course in course_select.options:
+        for course in tmp_course_select.options:
             try:
                 course_select.select_by_visible_text(course.text)
                 print("Getting Absentee data for",course.text)
@@ -148,13 +149,14 @@ class HelloFrame(wx.Frame):
                 time.sleep(5)
                 tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
                     EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-                time.sleep(13)
+                time.sleep(15)
                 table_data = WebDriverWait(driver, 2).until(
                     EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
                 course_dicts[course.text] = self.html_to_dataframe(table_data, tmp_table_rows)
                 percent += 1
                 self.progress.Update(percent)
             except:
+                print(f'error when getting data for {course.text}')
                 percent += 1
                 self.progress.Update(percent)
                 pass
@@ -164,7 +166,7 @@ class HelloFrame(wx.Frame):
         names = []
         dates = []
         baihoc = []
-        comments = []
+        #comments = []
         for course in course_dicts:
             for student in course_dicts[course]:
                 if len(course_dicts[course][student]) != 0:
@@ -172,17 +174,21 @@ class HelloFrame(wx.Frame):
                         courses.append(course)
                         names.append(student)
                         dates.append(date)
+                        baihoc.append(course_dicts[course][student][date][0])
+                        '''
                         if len(course_dicts[course][student][date]) > 1:
                             baihoc.append(course_dicts[course][student][date][0])
                             comments.append(course_dicts[course][student][date][1])
                         else:
                             baihoc.append(course_dicts[course][student][date][0])
                             comments.append("")
+                        '''
         df["Course Name"] = courses
         df["Student"] = names
         df["Absent Date"] = dates
         df["Bai Hoc"] = baihoc
-        df["Comments"] = comments
+        #df["Comments"] = comments
+        df = df.groupby(["Course Name","Absent Date"])['Student'].agg(','.join).reset_index()
         df = df.sort_values(['Course Name'], ascending=True).reset_index(drop=True)
         df.index += 1
         # Create a Pandas Excel writer using XlsxWriter as the engine.
@@ -191,14 +197,16 @@ class HelloFrame(wx.Frame):
             df.to_excel(writer, sheet_name='Sheet1')
             # Close the Pandas Excel writer and output the Excel file to the buffer
             writer.save()
+        '''
         with open(f"{self.start_date}-{self.end_date}.json", "w") as outfile:
             json.dump(course_dicts, outfile)
+        '''
         driver.quit()
         tmp_driver.quit()
         end_time = datetime.now()
         print('Duration: {}'.format(end_time - start_time))
         
-def main():
+def main():                  
     # When this module is run (not imported) then create the app, the
     # frame, show it, and start the event loop.
     app = wx.App()
