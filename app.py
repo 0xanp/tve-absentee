@@ -1,4 +1,4 @@
-import json
+#import json
 from dotenv import load_dotenv
 import os
 from datetime import datetime
@@ -74,7 +74,7 @@ class HelloFrame(wx.Frame):
             EC.element_to_be_clickable((By.XPATH, xpath))))
         return driver, course_select
 
-    def html_to_dataframe(self, table_data, tmp_table_rows):
+    def html_to_dict(self, table_data, tmp_table_rows):
         course_dict = {}
         # iterate through the table of students with their attendance 
         # each student has a dictionary of dates where each date has a dictionary
@@ -139,22 +139,26 @@ class HelloFrame(wx.Frame):
         tmp_driver, tmp_course_select = self.load_options("https://trivietedu.ileader.vn/Default.aspx?mod=lophoc!lophoc_baihoc", '//*[@id="idlophoc"]')
         percent = 0
         course_dicts = {}
-        self.maxPercent = len(course_select.options)
+        self.maxPercent = len(tmp_course_select.options)
         self.showProgress()
         for course in tmp_course_select.options:
             try:
                 course_select.select_by_visible_text(course.text)
                 print("Getting Absentee data for",course.text)
                 tmp_course_select.select_by_visible_text(course.text)
-                time.sleep(5)
+                time.sleep(2)
                 tmp_table_rows = WebDriverWait(tmp_driver, 2).until(
                     EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-                time.sleep(15)
-                table_data = WebDriverWait(driver, 2).until(
-                    EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
-                course_dicts[course.text] = self.html_to_dataframe(table_data, tmp_table_rows)
-                percent += 1
-                self.progress.Update(percent)
+                if datetime.strptime(tmp_table_rows[0].find_elements(By.XPATH,"./td")[1].text,"%d/%m/%Y").date() > self.end_date or datetime.strptime(tmp_table_rows[-1].find_elements(By.XPATH,"./td")[1].text,"%d/%m/%Y").date() < self.start_date:
+                    percent += 1
+                    self.progress.Update(percent)
+                else:
+                    time.sleep(13)
+                    table_data = WebDriverWait(driver, 2).until(
+                        EC.presence_of_all_elements_located((By.XPATH,'//*[@id="showlist"]/tr')))
+                    course_dicts[course.text] = self.html_to_dict(table_data, tmp_table_rows)
+                    percent += 1
+                    self.progress.Update(percent)
             except:
                 print(f'error when getting data for {course.text}')
                 percent += 1
@@ -188,8 +192,9 @@ class HelloFrame(wx.Frame):
         df["Absent Date"] = dates
         df["Bai Hoc"] = baihoc
         #df["Comments"] = comments
-        df = df.groupby(["Course Name","Absent Date"])['Student'].agg(','.join).reset_index()
-        df = df.sort_values(['Course Name'], ascending=True).reset_index(drop=True)
+        df = df.groupby(["Course Name","Absent Date","Bai Hoc"])['Student'].agg(','.join).reset_index()
+        df = df[["Course Name", "Absent Date", "Student", "Bai Hoc"]]
+        df = df.sort_values(['Course Name','Absent Date'], ascending=True).reset_index(drop=True)
         df.index += 1
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         with pd.ExcelWriter(f"Absentee-{self.start_date}-{self.end_date}.xlsx", engine='xlsxwriter') as writer:
