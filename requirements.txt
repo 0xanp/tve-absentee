@@ -5,3 +5,5 @@ xlsxwriter==3.0.3
 wxPython==4.2.0
 pyinstaller==5.6.1
 webdriver-manager==3.8.4
+beautifulsoup4==4.11.1
+lxml==4.9.1
